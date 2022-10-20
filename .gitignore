@@ -1,0 +1,10 @@
+# Build artifacts
+build/
+*.vcd
+
+# Reference materials
+ref/
+
+# macOS files
+.DS_Store
+*.swp
