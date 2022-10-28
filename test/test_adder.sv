@@ -90,7 +90,7 @@ module test_adder;
         @(posedge clk_i);
 
         assert (z_o === z) else
-            $fatal(1, "INCORRECT SUM/DIFFERENCE");
+            $fatal(1, "Incorrect sum/difference");
     endtask
 
     always #5 clk_i = ~clk_i;
@@ -109,55 +109,46 @@ module test_adder;
         repeat (16) @ (posedge clk_i);
         rst_i = 'h0;
 
-        // 4.5 + 3.75 = 8.25
-        perform_arithmetic('h40900000, 'h40700000, 'h41040000);
+        // 1.5 + 2048.006348 = 2049.506348
+        perform_arithmetic('h3fc00000, 'h4500001a, 'h4500181a);
 
-        // -9 + 3.375 = -5.0625
-        perform_arithmetic('hc1100000, 'h407c0000, 'hc0a20000);
+        // 209102.0123408 + 3.00000011676e-16 = 209102.0123408
+        perform_arithmetic('h484c3381, 'h25acf030, 'h484c3381);
+
+        // -8092.000425 - 0.00000040523 = -8092.0004254052
+        perform_arithmetic('hc5fce001, 'h34d98e63, 'hc5fce001);
+
+        // -243.001999 - 9.6 = -252.601990
+        perform_arithmetic('hc3730083, 'hc119999a, 'hc37c9a1c);
+
+        // 0.0125 - 102410.5078125 = -102410.5
+        perform_arithmetic('h3c4ccccd, 'hc7c80541, 'hc7c80540);
+
+        // -10.2 + 400.0069402 = 389.8069402
+        perform_arithmetic('hc1233333, 'h43c800e3, 'h43c2e74a);
+
+
+
 
         /*
-
-        // Positive operands
-        //
-        // 1.5, 2048.006348
-        full_parse('h3fc00000, 'h4500001a);
-        // 209102.0123408, 3.00000011676e-16
-        full_parse('h484c3381, 'h25acf030);
-
-        // Negative operands
-        //
-        // -8092.000425, -0.00000040523
-        full_parse('hc5fce001, 'hb4d98e63);
-        // -243.002, -9.6
-        full_parse('h3730083, 'hc119999a);
-
-        // Positive-negative operands
-        //
-        // 0.0125, -102410.5059
-        full_parse('h3c4ccccd, 'hc7c80541);
-        // -10.2, 400.0069402
-        full_parse('hc1233333, 'h43c800e3);
-
-        // Infinity
-        //
         // +inf, -0.00125
         full_parse('h7f800000, 'hbaa3d70a);
+
         // -inf, 2048.0192
         full_parse('hff800000, 'h4500004f);
 
-        // NaN
-        //
         // NaN, -6.08
         full_parse('h7fffffff,'hc0c28f5c);
+
         // 0.0000298, NaN
         full_parse('h37f9fb03, 'h7fffffff);
 
-        // Positive-negative zero
-        //
         // +0.0, -0.0
         full_parse('h00000000, 'h80000000);
+
         // +0.0, 92.6
         full_parse('h00000000, 'h42b93333);
+
         // -0.0, 0.02104
         full_parse('h80000000, 'h3cac5c14);
         */
