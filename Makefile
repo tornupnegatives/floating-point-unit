@@ -1,12 +1,17 @@
 VC=iverilog
-VCFLAGS=-g2012
-BUILD=build
+VC_FLAGS=-g2012
+BUILD_DIR=build
 
 test_operands: src/operands.sv test/test_operands.sv
-	@mkdir -p build
-	$(VC) $(VCFLAGS) -o $(BUILD)/test_operands src/operands.sv test/test_operands.sv
-	./$(BUILD)/test_operands
+	@mkdir -p $(BUILD_DIR)
+	$(VC) $(VC_FLAGS) -o $(BUILD_DIR)/$@ $^
+	./$(BUILD_DIR)/$@
+
+test_adder: src/operands.sv src/adder.sv test/test_adder.sv
+	@mkdir -p $(BUILD_DIR)
+	$(VC) $(VC_FLAGS) -o $(BUILD_DIR)/$@ $^
+	./$(BUILD_DIR)/$@
 
 clean:
-	@rm -rf build
-	@rm -rf *.vcd
+	@rm -rf $(BUILD_DIR)
+	@rm -f *.vcd
