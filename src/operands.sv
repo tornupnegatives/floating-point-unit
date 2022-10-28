@@ -42,9 +42,7 @@ assign x_frac = x_i[22:0];
 assign y_frac = y_i[22:0];
 
 // Exponent analysis
-//assign x_exp_unbiased = x_exp - 'd127;
-//assign y_exp_unbiased = y_exp - 'd127;
-assign x_greater = x_exp > y_exp;
+assign x_greater = (x_exp > y_exp);
 
 // Output assignments
 assign x_sign_o = x_i[31];
@@ -60,10 +58,10 @@ assign x_greater_o = x_greater;
 assign exp_shift_o = x_greater ? (x_exp - y_exp) :
                                  (y_exp - x_exp) ;
 
-assign infinity_o = (x_exp == 'd255 && x_frac == 'd0) ||
-                    (y_exp == 'd255 && y_frac == 'd0) ;
+assign infinity_o = (x_exp === 'd255 && x_frac === 'd0) ||
+                    (y_exp === 'd255 && y_frac === 'd0) ;
 
-assign nan_o = (x_exp == 'd255 && x_frac != 'd0) ||
-               (y_exp == 'd255 && y_frac != 'd0) ;
+assign nan_o = (x_exp === 'd255 && x_frac !== 'd0) ||
+               (y_exp === 'd255 && y_frac !== 'd0) ;
 
 endmodule
