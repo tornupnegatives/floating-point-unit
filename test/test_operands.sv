@@ -15,13 +15,15 @@ module test_operands;
     logic [22:0] x_frac_o;
     logic [22:0] y_frac_o;
 
-    // Exponent metadata
+    // Exponent shift
     logic x_greater_o;
     logic [7:0] exp_shift_o;
 
-    // Error flags
-    logic infinity_o;
-    logic nan_o;
+    // Infinity/NaN flags
+    logic x_infinity_o;
+    logic y_infinity_o;
+    logic x_nan_o;
+    logic y_nan_o;
 
     // Connect module
     operands DUT(.*);
@@ -40,8 +42,10 @@ module test_operands;
 
         logic [31:0] exp_shift;
 
-        logic infinity;
-        logic nan;
+        logic x_infinity;
+        logic y_infinity;
+        logic x_nan;
+        logic y_nan;
 
         // Display operands
         $display("X=%x\tY=%x", x, y);
@@ -55,9 +59,11 @@ module test_operands;
         y_exp = y[30:23];
         y_frac = y[22:0];
 
-        // Error flags
-        infinity = (x_frac === 'hff && x_frac === 'h0) || (y_frac === 'hff && y_frac === 'h0);
-        nan = (x_frac == 'hff && x_frac !== 'h0) || (y_frac == 'hff && y_frac !== 'h0);
+        // Inf/NaN flags
+        x_infinity = (x_exp === 'hff && x_frac === 'h0);
+        y_infinity = (y_exp === 'hff && y_frac === 'h0);
+        x_nan = (x_exp === 'hff && x_frac !== 'h0);
+        y_nan = (y_exp === 'hff && y_frac !== 'h0);
 
         exp_shift = (x_exp > y_exp) ? (x_exp - y_exp) : (y_exp - x_exp);
 
@@ -92,17 +98,19 @@ module test_operands;
 
         assert(exp_shift_o === exp_shift) else
             $fatal(1, "Incorrect exponent shift\nExpected=%x, Actual=%x", exp_shift, exp_shift_o);
-        
-        // Check error flags
-        if (x_exp === 'hff) begin
-            assert(x_frac === 'h0 ? infinity_o : nan_o) else
-                $fatal(1, "Incorrect error flags for x\tExpected=(inf=%h, NaN=%h), Actual=(inf=%h, NaN=%h)", infinity, nan, infinity_o, nan_o);
-        end
 
-        if (y_exp == 'hff) begin
-            assert(y_frac === 'h0 ? infinity_o : nan_o) else
-                $fatal(1, "Incorrect error flags for y\tExpected=(inf=%h, NaN=%h), Actual=(inf=%h, NaN=%h)", infinity, nan, infinity_o, nan_o);
-        end
+        // Check infinity/NaN flags
+        assert(x_infinity === x_infinity_o) else
+            $fatal(1, "Incorrect infinity flag for x\tExpected=%h, Actual=%h", x_infinity, x_infinity_o);
+
+        assert(y_infinity === y_infinity_o) else
+            $fatal(1, "Incorrect infinity flag for y\tExpected=%h, Actual=%h", y_infinity, y_infinity_o);
+
+        assert(x_nan === x_nan_o) else
+            $fatal(1, "Incorrect NaN flag for x\tExpected=%h, Actual=%h", x_nan, x_nan_o);
+
+        assert(y_nan === y_nan_o) else
+            $fatal(1, "Incorrect NaN flag for y\tExpected=%h, Actual=%h", y_nan, y_nan_o);
 
         #5;
 

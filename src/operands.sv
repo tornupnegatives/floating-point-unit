@@ -13,13 +13,15 @@ module operands (
     output logic [22:0] x_frac_o,
     output logic [22:0] y_frac_o,
 
-    // Exponent metadata
+    // Exponent shift
     output logic x_greater_o,
     output logic [7:0] exp_shift_o,
 
-    // Error flags
-    output logic infinity_o,
-    output logic nan_o
+    // Infinity/NaN flags
+    output logic x_infinity_o,
+    output logic y_infinity_o,
+    output logic x_nan_o,
+    output logic y_nan_o
 );
 
 // Intermediate values
@@ -55,13 +57,12 @@ assign x_frac_o = x_frac;
 assign y_frac_o = y_frac;
 
 assign x_greater_o = x_greater;
-assign exp_shift_o = x_greater ? (x_exp - y_exp) :
-                                 (y_exp - x_exp) ;
+assign exp_shift_o = x_greater ? (x_exp - y_exp) : (y_exp - x_exp);
 
-assign infinity_o = (x_exp === 'd255 && x_frac === 'd0) ||
-                    (y_exp === 'd255 && y_frac === 'd0) ;
+assign x_infinity_o = (x_exp === 'hff && x_frac === 'h0);
+assign y_infinity_o = (y_exp === 'hff && y_frac === 'h0);
 
-assign nan_o = (x_exp === 'd255 && x_frac !== 'd0) ||
-               (y_exp === 'd255 && y_frac !== 'd0) ;
+assign x_nan_o = (x_exp === 'hff && x_frac !== 'h0);
+assign y_nan_o = (y_exp === 'hff && y_frac !== 'h0);
 
 endmodule
