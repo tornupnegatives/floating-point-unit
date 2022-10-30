@@ -19,8 +19,12 @@ module adder (
     // Operand metadata
     input x_greater_i,
     input [7:0] exp_shift_i,
-    input infinity_i,
-    input nan_i,
+
+    // Infinity/NaN flags
+    input x_infinity_i,
+    input y_infinity_i,
+    input x_nan_i,
+    input y_nan_i,
 
     // Results
     output logic [31:0] z_o,
@@ -50,13 +54,6 @@ logic [7:0] z_exp, z_exp_ns;
 logic [23:0] z_frac_expanded, z_frac_expanded_ns;
 logic z_frac_carry, z_frac_carry_ns;
 
-// Outputs
-logic [31:0] z, z_ns;
-logic z_infinity, z_infinity_ns;
-logic z_nan, z_nan_ns;
-
-logic data_valid, data_valid_ns;
-
 always_ff @(posedge clk_i) begin
     if (rst_i) begin
         z_sign <= 'h0;
@@ -65,11 +62,6 @@ always_ff @(posedge clk_i) begin
         z_frac_expanded <= 'h0;
         z_frac_carry <= 'h0;
 
-        z <= 'h0;
-        z_infinity <= 'h0;
-        z_nan <= 'h0;
-        data_valid <= 'h0;
-
         state <= 'h0;
     end else begin
         z_sign <= z_sign_ns;
@@ -77,11 +69,6 @@ always_ff @(posedge clk_i) begin
 
         z_frac_expanded <= z_frac_expanded_ns;
         z_frac_carry <= z_frac_carry_ns;
-
-        z <= z_ns;
-        z_infinity <= z_infinity_ns;
-        z_nan <= z_nan_ns;
-        data_valid <= data_valid_ns;
 
         state <= state_ns;
     end
@@ -92,21 +79,22 @@ always_comb begin
     z_exp_ns = z_exp;
     z_frac_expanded_ns = z_frac_expanded;
     z_frac_carry_ns = z_frac_carry;
-    z_ns = z;
-    z_infinity_ns = z_infinity;
-    z_nan_ns = z_nan;
-    data_valid_ns = data_valid;
     state_ns = state;
 
     case (state)
         READY: begin
-            if (data_valid_i) begin
+            if (rst_i) begin
+                data_valid_o = 'h0;
+                z_o = 'h0;
+                z_infinity_o = 'h0;
+                z_nan_o = 'h0;
+            end else if (data_valid_i) begin
                 z_sign_ns = (x_greater_i) ? x_sign_i : y_sign_i;
                 z_exp_ns = (x_greater_i) ? x_exp_i : y_exp_i;
 
-                {z_frac_carry_ns, z_frac_expanded_ns} = (should_subtract)   ?
-                                                        a_frac - b_frac     :
-                                                        a_frac + b_frac     ;
+                {z_frac_carry_ns, z_frac_expanded_ns} = (should_subtract) ? a_frac - b_frac : a_frac + b_frac;
+
+                data_valid_o = 'h0;
 
                 // TODO SPECIAL CASES
                 state_ns = NORMALIZE;
@@ -124,25 +112,17 @@ always_comb begin
                 end
             end
 
-            // Assign output registers
-            data_valid_ns = 'h1;
-            z_ns = {z_sign, z_exp, z_frac_expanded[22:0]};
-            z_infinity_ns = 'h0;
-            z_nan_ns = 'h0;
-
             state_ns = DONE;
         end
 
         DONE: begin
-            data_valid_ns = 'h0;
+            data_valid_o = 'h1;
+            z_o = {z_sign, z_exp, z_frac_expanded[22:0]};
+            z_infinity_o = 'h0;
+            z_nan_o = 'h0;
+
             state_ns = READY;
         end
     endcase
 end
-
-assign z_o = z;
-assign z_infinity_o = z_infinity;
-assign z_nan_o = z_nan;
-assign data_valid_o = data_valid;
-
 endmodule
