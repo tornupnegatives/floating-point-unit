@@ -54,6 +54,9 @@ logic [7:0] z_exp, z_exp_ns;
 logic [23:0] z_frac_expanded, z_frac_expanded_ns;
 logic z_frac_carry, z_frac_carry_ns;
 
+logic [7:0] z_exp_normalized, z_exp_normalized_ns;
+logic [23:0] z_frac_normalized, z_frac_normalized_ns;
+
 always_ff @(posedge clk_i) begin
     if (rst_i) begin
         z_sign <= 'h0;
@@ -61,6 +64,9 @@ always_ff @(posedge clk_i) begin
 
         z_frac_expanded <= 'h0;
         z_frac_carry <= 'h0;
+
+        z_exp_normalized <= 'h0;
+        z_frac_normalized <= 'h0;
 
         state <= 'h0;
     end else begin
@@ -70,15 +76,20 @@ always_ff @(posedge clk_i) begin
         z_frac_expanded <= z_frac_expanded_ns;
         z_frac_carry <= z_frac_carry_ns;
 
+        z_exp_normalized <= z_exp_normalized_ns;
+        z_frac_normalized <= z_frac_normalized_ns;
+
         state <= state_ns;
     end
 end
 
-always_comb begin
+always @(*) begin
     z_sign_ns = z_sign;
     z_exp_ns = z_exp;
     z_frac_expanded_ns = z_frac_expanded;
     z_frac_carry_ns = z_frac_carry;
+    z_exp_normalized_ns = z_exp_normalized;
+    z_frac_normalized_ns = z_frac_normalized;
     state_ns = state;
 
     case (state)
@@ -102,13 +113,19 @@ always_comb begin
         end
 
         NORMALIZE: begin
+            z_exp_normalized_ns = z_exp;
+            z_frac_normalized_ns = z_frac_expanded;
+
             if (z_frac_carry) begin
-                z_frac_expanded_ns = z_frac_expanded >> 1;
-                z_exp_ns = z_exp + 1;
-            end else begin
-                for (int i = 0; i < 23 && !z_frac_expanded_ns[23]; i++) begin
-                    z_frac_expanded_ns = z_frac_expanded << i;
-                    z_exp_ns = z_exp - i;
+                z_frac_normalized_ns = z_frac_expanded >> 1;
+                z_frac_normalized_ns[23] = 'b1;
+                z_exp_normalized_ns = z_exp + 1;
+            end
+                
+            else if (!z_frac_expanded[23]) begin
+                while(!z_frac_normalized_ns[23]) begin
+                    z_frac_normalized_ns <<= 1;
+                    z_exp_normalized_ns--;
                 end
             end
 
@@ -117,7 +134,7 @@ always_comb begin
 
         DONE: begin
             data_valid_o = 'h1;
-            z_o = {z_sign, z_exp, z_frac_expanded[22:0]};
+            z_o = {z_sign, z_exp_normalized, z_frac_normalized[22:0]};
             z_infinity_o = 'h0;
             z_nan_o = 'h0;
 

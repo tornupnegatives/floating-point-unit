@@ -19,15 +19,17 @@ module test_adder;
     logic x_greater_o;
     logic [7:0] exp_shift_o;
 
-    // Error flags
-    logic infinity_o;
-    logic nan_o;
+    // Infinity/NaN flags
+    logic x_infinity_o;
+    logic y_infinity_o;
+    logic x_nan_o;
+    logic y_nan_o;
 
     // Control signals
     logic rst_i;
     logic clk_i;
     logic data_valid_i;
-    logic data_ready_o;
+    logic data_valid_o;
 
     // Results
     logic [31:0] z_o;
@@ -40,7 +42,7 @@ module test_adder;
         .rst_i,
         .clk_i,
         .data_valid_i,
-        .data_ready_o,
+        .data_valid_o,
 
         .x_sign_i(x_sign_o),
         .x_exp_i(x_exp_o),
@@ -52,8 +54,11 @@ module test_adder;
 
         .x_greater_i(x_greater_o),
         .exp_shift_i(exp_shift_o),
-        .infinity_i(infinity_o),
-        .nan_i(nan_o),
+
+        .x_infinity_i(x_infinity_o),
+        .y_infinity_i(y_infinity_o),
+        .x_nan_i(x_nan_o),
+        .y_nan_i(y_nan_o),
 
         .z_o,
         .z_infinity_o,
@@ -84,7 +89,7 @@ module test_adder;
             data_valid_i = 'h0;
         end
 
-        while (!data_ready_o)
+        while (!data_valid_o)
             @(posedge clk_i);
 
         @(posedge clk_i);
@@ -109,6 +114,8 @@ module test_adder;
         repeat (16) @ (posedge clk_i);
         rst_i = 'h0;
 
+        // No normalization ///////////////////////////////////////////////////
+
         // 1.5 + 2048.006348 = 2049.506348
         perform_arithmetic('h3fc00000, 'h4500001a, 'h4500181a);
 
@@ -121,37 +128,33 @@ module test_adder;
         // -243.001999 - 9.6 = -252.601990
         perform_arithmetic('hc3730083, 'hc119999a, 'hc37c9a1c);
 
-        // 0.0125 - 102410.5078125 = -102410.5
-        perform_arithmetic('h3c4ccccd, 'hc7c80541, 'hc7c80540);
+        // Normalization //////////////////////////////////////////////////////
 
-        // -10.2 + 400.0069402 = 389.8069402
-        perform_arithmetic('hc1233333, 'h43c800e3, 'h43c2e74a);
+        // 0.5 - 0.4375 = 0.0625
+        perform_arithmetic('h3f000000, 'hbee00000, 'h3d800000);
 
+        // 999.98999 + 0.01 = 999.999939
+        perform_arithmetic('h4479ff5c, 'h3c23d70a, 'h4479ffff);
 
+        // 150.0924 - 200 = -49.9076
+        perform_arithmetic('h431617a8, 'hc3480000, 'hc247a160);
 
+        // 46.02 - 39.8034 = 6.2166
+        perform_arithmetic('h4238147b, 'hc21f36ae, 'h40c6ee68);
 
-        /*
-        // +inf, -0.00125
-        full_parse('h7f800000, 'hbaa3d70a);
+        // 0.09025 + 0.91006 = 1.00031
+        perform_arithmetic('h3db8d4fe, 'h3f68f9b1, 'h3f800a28);
 
-        // -inf, 2048.0192
-        full_parse('hff800000, 'h4500004f);
+        // 98.0125 + 12.0125 = 110.025
+        perform_arithmetic('h42c40666, 'h41403333, 'h42dc0ccc);
 
-        // NaN, -6.08
-        full_parse('h7fffffff,'hc0c28f5c);
+        // Positive-negative zero
 
-        // 0.0000298, NaN
-        full_parse('h37f9fb03, 'h7fffffff);
+        // Positive-negative infinity
 
-        // +0.0, -0.0
-        full_parse('h00000000, 'h80000000);
+        // NaN
 
-        // +0.0, 92.6
-        full_parse('h00000000, 'h42b93333);
-
-        // -0.0, 0.02104
-        full_parse('h80000000, 'h3cac5c14);
-        */
+        // Overflow/underflow
 
         $display("@@@ PASSED");
         $finish;
