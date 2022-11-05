@@ -44,7 +44,7 @@ assign x_frac = x_i[22:0];
 assign y_frac = y_i[22:0];
 
 // Exponent analysis
-assign x_greater = (x_exp > y_exp);
+assign x_greater = (x_exp === y_exp) ? (x_frac > y_frac) : (x_exp > y_exp);
 
 // Output assignments
 assign x_sign_o = x_i[31];
