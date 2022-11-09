@@ -28,8 +28,8 @@ module adder (
 
     // Results
     output logic [31:0] z_o,
-    output logic z_infinity_o,
-    output logic z_nan_o
+    output logic except_invalid_operation_o,
+    output logic except_overflow_o
 );
 
 // Expanded fractional components
@@ -44,6 +44,9 @@ assign should_subtract = (x_sign_i ^ y_sign_i);
 enum {
     READY,
     NORMALIZE,
+    INF_OPERANDS,
+    INVALID_OPERANDS,
+    VALIDATE_RESULT,
     DONE
 }
     state, state_ns;
@@ -57,6 +60,10 @@ logic z_frac_carry, z_frac_carry_ns;
 logic [7:0] z_exp_normalized, z_exp_normalized_ns;
 logic [23:0] z_frac_normalized, z_frac_normalized_ns;
 
+// Output registers
+logic invalid_operation, invalid_operation_ns;
+logic overflow, overflow_ns;
+
 always_ff @(posedge clk_i) begin
     if (rst_i) begin
         z_sign <= 'h0;
@@ -67,6 +74,9 @@ always_ff @(posedge clk_i) begin
 
         z_exp_normalized <= 'h0;
         z_frac_normalized <= 'h0;
+
+        invalid_operation <= 'h0;
+        overflow <= 'h0;
 
         state <= 'h0;
     end else begin
@@ -79,6 +89,9 @@ always_ff @(posedge clk_i) begin
         z_exp_normalized <= z_exp_normalized_ns;
         z_frac_normalized <= z_frac_normalized_ns;
 
+        invalid_operation <= invalid_operation_ns;
+        overflow <= overflow_ns;
+
         state <= state_ns;
     end
 end
@@ -90,6 +103,8 @@ always @(*) begin
     z_frac_carry_ns = z_frac_carry;
     z_exp_normalized_ns = z_exp_normalized;
     z_frac_normalized_ns = z_frac_normalized;
+    invalid_operation_ns = invalid_operation;
+    overflow_ns = overflow;
     state_ns = state;
 
     case (state)
@@ -97,18 +112,25 @@ always @(*) begin
             if (rst_i) begin
                 data_valid_o = 'h0;
                 z_o = 'h0;
-                z_infinity_o = 'h0;
-                z_nan_o = 'h0;
+                except_invalid_operation_o = 'h0;
+                except_overflow_o = 'h0;
+
             end else if (data_valid_i) begin
                 z_sign_ns = (x_greater_i) ? x_sign_i : y_sign_i;
                 z_exp_ns = (x_greater_i) ? x_exp_i : y_exp_i;
 
                 {z_frac_carry_ns, z_frac_expanded_ns} = (should_subtract) ? a_frac - b_frac : a_frac + b_frac;
 
-                data_valid_o = 'h0;
+                if ( (x_infinity_i && y_infinity_i) || (x_nan_i || y_nan_i) )
+                    state_ns = INVALID_OPERANDS;
 
-                // TODO SPECIAL CASES
-                state_ns = NORMALIZE;
+                else if (x_infinity_i ^ y_infinity_i)
+                    state_ns = INF_OPERANDS;
+
+                else
+                    state_ns = NORMALIZE;
+
+                data_valid_o = 'h0;
             end
         end
 
@@ -129,14 +151,47 @@ always @(*) begin
                 end
             end
 
+            invalid_operation_ns = 'h0;
+            state_ns = VALIDATE_RESULT;
+        end
+
+        VALIDATE_RESULT: begin
+            overflow_ns = 'h0;
+
+            if (z_exp_normalized === 'hff) begin
+                z_sign_ns = 'h0;
+                z_frac_normalized_ns = 'h0;
+                overflow_ns = 'h1;
+            end
+
+            state_ns = DONE;
+        end
+
+        INF_OPERANDS: begin
+            z_sign_ns = (x_infinity_i) ? x_sign_i : y_sign_i;
+            z_exp_normalized_ns = 'hff;
+            z_frac_normalized_ns = 'h0;
+
+            state_ns = DONE;
+        end
+
+        INVALID_OPERANDS: begin
+            static logic [31:0] quiet_nan = 32'h7fffffff;
+
+            z_sign_ns = quiet_nan[31];
+            z_exp_normalized_ns = quiet_nan[30:23];
+            z_frac_normalized_ns = quiet_nan[22:0];
+
+            invalid_operation_ns = 'h1;
+            overflow_ns = 'h0;
             state_ns = DONE;
         end
 
         DONE: begin
             data_valid_o = 'h1;
             z_o = {z_sign, z_exp_normalized, z_frac_normalized[22:0]};
-            z_infinity_o = 'h0;
-            z_nan_o = 'h0;
+            except_invalid_operation_o = invalid_operation;
+            except_overflow_o = overflow;
 
             state_ns = READY;
         end

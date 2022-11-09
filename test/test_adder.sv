@@ -33,8 +33,8 @@ module test_adder;
 
     // Results
     logic [31:0] z_o;
-    logic z_infinity_o;
-    logic z_nan_o;
+    logic except_invalid_operation_o;
+    logic except_overflow_o;
 
     // Connect modules
     operands DUT_OPERANDS(.*);
@@ -61,8 +61,8 @@ module test_adder;
         .y_nan_i(y_nan_o),
 
         .z_o,
-        .z_infinity_o,
-        .z_nan_o
+        .except_invalid_operation_o,
+        .except_overflow_o
     );
 
     task perform_arithmetic;
@@ -98,6 +98,40 @@ module test_adder;
             $fatal(1, "Incorrect sum/difference");
     endtask
 
+    task perform_exception;
+        input [31:0] x;
+        input [31:0] y;
+        input integer operand;
+
+        logic [31:0] result;
+        logic except_invalid_operation;
+        logic except_overflow;
+
+        result = 'hx;
+        except_invalid_operation = 'h0;
+        except_overflow = 'h0;
+
+        case(operand)
+            0: begin
+                result = 'h7fffffff;
+                except_invalid_operation = 'h1;
+            end
+
+            1: begin
+                result = 32'h7f800000;
+                except_overflow = 'h1;
+            end
+        endcase
+
+        perform_arithmetic(x, y, result);
+
+        assert (except_invalid_operation_o === except_invalid_operation) else
+            $fatal(1, "Incorrect flag for invalid operation");
+
+        assert (except_overflow_o === except_overflow) else
+            $fatal(1, "Incorrect flag for overflow");
+    endtask
+
     always #5 clk_i = ~clk_i;
 
     initial begin
@@ -116,6 +150,8 @@ module test_adder;
 
         // No normalization ///////////////////////////////////////////////////
 
+        $display("Case A: Sum does not require normalization");
+
         // 1.5 + 2048.006348 = 2049.506348
         perform_arithmetic('h3fc00000, 'h4500001a, 'h4500181a);
 
@@ -129,6 +165,8 @@ module test_adder;
         perform_arithmetic('hc3730083, 'hc119999a, 'hc37c9a1c);
 
         // Normalization //////////////////////////////////////////////////////
+
+        $display("Case B: Sum requires normalization");
 
         // 0.5 - 0.4375 = 0.0625
         perform_arithmetic('h3f000000, 'hbee00000, 'h3d800000);
@@ -148,13 +186,75 @@ module test_adder;
         // 98.0125 + 12.0125 = 110.025
         perform_arithmetic('h42c40666, 'h41403333, 'h42dc0ccc);
 
-        // Positive-negative zero
+        // Zero operand ///////////////////////////////////////////////////////
 
-        // Positive-negative infinity
+        $display("Case C: Operand is zero");
 
-        // NaN
+        // 209102.0123408 + 0.0 = 209102.0123408
+        perform_arithmetic('h484c3381, 'h00000000, 'h484c3381);
 
-        // Overflow/underflow
+        // 999.98999 - 0.0 = 999.98999
+        perform_arithmetic('h4479ff5c, 'h80000000, 'h4479ff5c);
+
+        // Infinity ///////////////////////////////////////////////////////////
+
+        $display("Case D: Operand is infinite and sum is infinte");
+
+        // inf + x = inf
+        perform_arithmetic('h7f800000, 'h4479ff5c, 'h7f800000);
+
+        // x + inf = inf
+        perform_arithmetic('h4479ff5c, 'h7f800000, 'h7f800000);
+
+        // -inf + x = -inf
+        perform_arithmetic('hff800000, 'h4479ff5c, 'hff800000);
+
+        // inf - x = inf
+        perform_arithmetic('h7f800000, 'hc21f36ae, 'h7f800000);
+
+        // x - inf = -inf
+        perform_arithmetic('h4479ff5c, 'hff800000, 'hff800000);
+
+        // -inf - x = -inf
+        perform_arithmetic('hff800000, 'hc21f36ae, 'hff800000);
+
+        // Invalid operand ////////////////////////////////////////////////////
+
+        $display("Case E: Invalid operation exception");
+
+        // inf + inf
+        perform_exception('h7f800000, 'h7f800000, 0);
+
+        // inf - inf
+        perform_exception('h7f800000, 'hff800000, 0);
+
+        // x + NaN
+        perform_exception('h3db8d4fe, 'h7fffffff, 0);
+
+        // x - NaN
+        perform_exception('h3db8d4fe, 'hffffffff, 0);
+
+        // NaN + NaN
+        perform_exception('h7fffffff, 'h7fffffff, 0);
+
+        // NaN - NaN
+        perform_exception('h7fffffff, 'hffffffff, 0);
+
+        // NaN + inf
+        perform_exception('h7fffffff, 'h7f800000, 0);
+
+        // Overflow ///////////////////////////////////////////////////////////
+
+        $display("Case F: Overflow exception");
+
+        // 3e38 + 6e37 = inf
+        perform_exception('h7f61b1e6, 'h7e348e52, 1);
+
+        // 3.1804e38 + 9.0125e37 = inf
+        perform_exception('h7f6f4447, 'h7e879ae3, 1);
+
+        // 3.40e38 + 1e37 = inf
+        perform_exception('h7f7fffff, 'h7cf0bdc2, 1);
 
         $display("@@@ PASSED");
         $finish;
