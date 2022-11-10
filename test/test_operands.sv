@@ -172,7 +172,7 @@ module test_operands;
     end
 
     initial begin
-        $dumpfile("dump.vcd");
+        $dumpfile("build/test_operands.vcd");
         $dumpvars;
     end
 

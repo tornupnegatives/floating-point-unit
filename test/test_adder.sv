@@ -261,7 +261,7 @@ module test_adder;
     end
 
     initial begin
-        $dumpfile("dump.vcd");
+        $dumpfile("build/test_adder.vcd");
         $dumpvars(0, test_adder);
     end
 
