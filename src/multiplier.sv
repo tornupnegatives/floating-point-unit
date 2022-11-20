@@ -44,10 +44,6 @@ enum {
 }
     state, state_ns;
 
-// Exponents for overflow detection
-logic [7:0] a_exp, a_exp_ns;
-logic [7:0] b_exp, b_exp_ns;
-
 logic z_sign, z_sign_ns;
 logic [8:0] z_exp, z_exp_ns;
 logic [47:0] z_frac_expanded, z_frac_expanded_ns;
@@ -67,9 +63,6 @@ logic overflow, overflow_ns;
 
 always_ff @(posedge clk_i) begin
     if (rst_i) begin
-        a_exp <= 'h0;
-        b_exp <= 'h0;
-
         z_sign <= 'h0;
         z_exp <= 'h0;
 
@@ -83,9 +76,6 @@ always_ff @(posedge clk_i) begin
 
         state <= 'h0;
     end else begin
-        a_exp <= a_exp_ns;
-        b_exp <= b_exp_ns;
-
         z_sign <= z_sign_ns;
         z_exp <= z_exp_ns;
 
@@ -102,9 +92,6 @@ always_ff @(posedge clk_i) begin
 end
 
 always @(*) begin
-    a_exp_ns = a_exp;
-    b_exp_ns = b_exp;
-
     z_sign_ns = z_sign;
     z_exp_ns = z_exp;
     z_frac_expanded_ns = z_frac_expanded;
@@ -123,9 +110,6 @@ always @(*) begin
                 except_overflow_o = 'h0;
 
             end else if (data_valid_i) begin
-                a_exp_ns = x_exp_i;
-                b_exp_ns = y_exp_i;
-
                 z_sign_ns = x_sign_i ^ y_sign_i;
                 z_exp_ns = (x_exp_i + y_exp_i) - 'd127;
 
