@@ -1,3 +1,5 @@
+`timescale 1ns/1ps
+
 module multiplier (
     // FPGA inteface
     input rst_i,
@@ -74,7 +76,7 @@ always_ff @(posedge clk_i) begin
         invalid_operation <= 'h0;
         overflow <= 'h0;
 
-        state <= 'h0;
+        state <= READY;
     end else begin
         z_sign <= z_sign_ns;
         z_exp <= z_exp_ns;
@@ -91,7 +93,7 @@ always_ff @(posedge clk_i) begin
     end
 end
 
-always @(*) begin
+always_comb begin
     z_sign_ns = z_sign;
     z_exp_ns = z_exp;
     z_frac_expanded_ns = z_frac_expanded;

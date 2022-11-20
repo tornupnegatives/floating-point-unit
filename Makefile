@@ -1,5 +1,5 @@
 VC=iverilog
-VC_FLAGS=-g2012
+VC_FLAGS=-g2012 -D ICARUS=1
 BUILD_DIR=build
 
 test_operands: src/operands.sv test/test_operands.sv

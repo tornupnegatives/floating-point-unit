@@ -1,3 +1,5 @@
+`timescale 1ns/1ps
+
 module adder (
     // FPGA inteface
     input rst_i,
@@ -78,7 +80,7 @@ always_ff @(posedge clk_i) begin
         invalid_operation <= 'h0;
         overflow <= 'h0;
 
-        state <= 'h0;
+        state <= READY;
     end else begin
         z_sign <= z_sign_ns;
         z_exp <= z_exp_ns;
@@ -96,7 +98,7 @@ always_ff @(posedge clk_i) begin
     end
 end
 
-always @(*) begin
+always_comb begin
     z_sign_ns = z_sign;
     z_exp_ns = z_exp;
     z_frac_expanded_ns = z_frac_expanded;
@@ -138,18 +140,20 @@ always @(*) begin
             z_exp_normalized_ns = z_exp;
             z_frac_normalized_ns = z_frac_expanded;
 
-            if (z_frac_carry) begin
-                z_frac_normalized_ns = z_frac_expanded >> 1;
-                z_frac_normalized_ns[23] = 'b1;
-                z_exp_normalized_ns = z_exp + 1;
+`ifdef ICARUS
+            while(!z_frac_normalized_ns[23]) begin
+               z_frac_normalized_ns <<= 1;
+            z_exp_normalized_ns--;
             end
-                
-            else if (!z_frac_expanded[23]) begin
-                while(!z_frac_normalized_ns[23]) begin
-                    z_frac_normalized_ns <<= 1;
-                    z_exp_normalized_ns--;
+`else
+            for (int i = 22; i >= 0; i--) begin
+                if (z_frac_expanded[i]) begin
+                    z_frac_normalized_ns <<= (23-i);
+                    z_exp_normalized_ns -= (23-i);
+                    break;
                 end
             end
+`endif
 
             invalid_operation_ns = 'h0;
             state_ns = VALIDATE_RESULT;

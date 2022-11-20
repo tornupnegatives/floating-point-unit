@@ -1,3 +1,5 @@
+`timescale 1ns/1ps
+
 module divider (
     // FPGA inteface
     input rst_i,
@@ -220,7 +222,11 @@ always_ff @(posedge clk_i) begin
     end
 end
 
+`ifdef ICARUS
 always @(*) begin
+`else
+always_comb begin
+`endif
     state_ns = state;
 
     numerator_ns = numerator;
