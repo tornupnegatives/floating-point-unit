@@ -37,7 +37,7 @@ module adder (
 // Expanded fractional components
 logic [23:0] a_frac, b_frac;
 assign a_frac = {1'b1, (x_greater_i ? x_frac_i : y_frac_i)};
-assign b_frac = {1'b1, (x_greater_i ? y_frac_i : x_frac_i)} >> exp_shift_i;
+assign b_frac = {1'b1, (x_greater_i ? y_frac_i : x_frac_i)};
 
 // Operation detection
 logic should_subtract;
@@ -101,12 +101,16 @@ end
 always_comb begin
     z_sign_ns = z_sign;
     z_exp_ns = z_exp;
+
     z_frac_expanded_ns = z_frac_expanded;
     z_frac_carry_ns = z_frac_carry;
+
     z_exp_normalized_ns = z_exp_normalized;
     z_frac_normalized_ns = z_frac_normalized;
+
     invalid_operation_ns = invalid_operation;
     overflow_ns = overflow;
+
     state_ns = state;
 
     case (state)
@@ -121,7 +125,7 @@ always_comb begin
                 z_sign_ns = (x_greater_i) ? x_sign_i : y_sign_i;
                 z_exp_ns = (x_greater_i) ? x_exp_i : y_exp_i;
 
-                {z_frac_carry_ns, z_frac_expanded_ns} = (should_subtract) ? a_frac - b_frac : a_frac + b_frac;
+                {z_frac_carry_ns, z_frac_expanded_ns} = (should_subtract) ? a_frac - (b_frac  >> exp_shift_i) : a_frac + (b_frac  >> exp_shift_i);
 
                 if ( (x_infinity_i && y_infinity_i) || (x_nan_i || y_nan_i) )
                     state_ns = INVALID_OPERANDS;
@@ -140,20 +144,28 @@ always_comb begin
             z_exp_normalized_ns = z_exp;
             z_frac_normalized_ns = z_frac_expanded;
 
+            if (z_frac_carry) begin
+                z_frac_normalized_ns = z_frac_expanded >> 1;
+                z_frac_normalized_ns[23] = 'b1;
+                z_exp_normalized_ns = z_exp + 1;
+            end
+
+            else begin
 `ifdef ICARUS
-            while(!z_frac_normalized_ns[23]) begin
-               z_frac_normalized_ns <<= 1;
-            z_exp_normalized_ns--;
-            end
-`else
-            for (int i = 22; i >= 0; i--) begin
-                if (z_frac_expanded[i]) begin
-                    z_frac_normalized_ns <<= (23-i);
-                    z_exp_normalized_ns -= (23-i);
-                    break;
+                while(!z_frac_normalized_ns[23]) begin
+                    z_frac_normalized_ns <<= 1;
+                    z_exp_normalized_ns -= 1;
                 end
-            end
+`else
+                for (int idx = 23; idx >= 0; idx--) begin
+                    if (z_frac_expanded[idx]) begin
+                        z_frac_normalized_ns <<= (23-idx);
+                        z_exp_normalized_ns -= (23-idx);
+                        break;
+                    end
+                end
 `endif
+            end
 
             invalid_operation_ns = 'h0;
             state_ns = VALIDATE_RESULT;
