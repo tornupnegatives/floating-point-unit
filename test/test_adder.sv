@@ -28,7 +28,8 @@ module test_adder;
     // Control signals
     logic rst_i;
     logic clk_i;
-    logic data_valid_i;
+    logic data_ready_i;
+    logic [6:0] rounding_mode_i;
     logic data_valid_o;
 
     // Results
@@ -41,7 +42,8 @@ module test_adder;
     adder DUT_ADDER(
         .rst_i,
         .clk_i,
-        .data_valid_i,
+        .data_ready_i,
+        .rounding_mode_i,
         .data_valid_o,
 
         .x_sign_i(x_sign_o),
@@ -81,12 +83,12 @@ module test_adder;
 
         // Start adder
         @(posedge clk_i) begin
-            data_valid_i = 'h1;
+            data_ready_i = 'h1;
         end
 
         // Wait for adder
         @(posedge clk_i) begin
-            data_valid_i = 'h0;
+            data_ready_i = 'h0;
         end
 
         while (!data_valid_o)
@@ -135,14 +137,15 @@ module test_adder;
     always #5 clk_i = ~clk_i;
 
     initial begin
-        $display("Testing operand parser");
+        $display("Testing adder (no rounding)");
 
         // Prepare DUT
         clk_i = 'h0;
         rst_i = 'h1;
         x_i = 'h0;
         y_i = 'h0;
-        data_valid_i = 'h0;
+        data_ready_i = 'h0;
+        rounding_mode_i = 'h0;
 
         // Reset DUT
         repeat (16) @ (posedge clk_i);
@@ -255,6 +258,16 @@ module test_adder;
 
         // 3.40e38 + 1e37 = inf
         perform_exception('h7f7fffff, 'h7cf0bdc2, 1);
+
+        // TTE Rounding ///////////////////////////////////////////////////////
+        $display("Testing rounding mode TTE");
+        rounding_mode_i = 'b000001;
+
+        // -243.001999 - 9.6 = -252.601990
+        perform_arithmetic('hc3730083, 'hc119999a, 'hc37c9a1d);
+
+        // 999.98999 + 0.01 = 999.999939
+        perform_arithmetic('h4479ff5c, 'h3c23d70a, 'h447a0000);
 
         $display("@@@ PASSED");
         $finish;

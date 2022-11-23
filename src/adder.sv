@@ -6,7 +6,8 @@ module adder (
     input clk_i,
 
     // Control
-    input data_valid_i,
+    input data_ready_i,
+    input [6:0] rounding_mode_i,
     output logic data_valid_o,
 
     // Decomposed operands
@@ -43,11 +44,16 @@ assign b_frac = {1'b1, (x_greater_i ? y_frac_i : x_frac_i)};
 logic should_subtract;
 assign should_subtract = (x_sign_i ^ y_sign_i);
 
+// Sticky bit mask
+logic [23:0] sticky_bit_mask;
+assign sticky_bit_mask = 23'h7fffff >> (23 - exp_shift_i + 2);
+
 enum {
     READY,
     NORMALIZE,
     INF_OPERANDS,
     INVALID_OPERANDS,
+    ROUND_TIE_TO_EVEN,
     VALIDATE_RESULT,
     DONE
 }
@@ -61,6 +67,13 @@ logic z_frac_carry, z_frac_carry_ns;
 
 logic [7:0] z_exp_normalized, z_exp_normalized_ns;
 logic [23:0] z_frac_normalized, z_frac_normalized_ns;
+
+// Rounding bits
+logic [6:0] rounding_mode, rounding_mode_ns;
+logic 
+    guard_bit, guard_bit_ns,
+    round_bit, round_bit_ns,
+    sticky_bit, sticky_bit_ns;
 
 // Output registers
 logic invalid_operation, invalid_operation_ns;
@@ -77,6 +90,11 @@ always_ff @(posedge clk_i) begin
         z_exp_normalized <= 'h0;
         z_frac_normalized <= 'h0;
 
+        rounding_mode <= 'h0;
+        guard_bit <= 'h0;
+        round_bit <= 'h0;
+        sticky_bit <= 'h0;
+
         invalid_operation <= 'h0;
         overflow <= 'h0;
 
@@ -91,6 +109,11 @@ always_ff @(posedge clk_i) begin
         z_exp_normalized <= z_exp_normalized_ns;
         z_frac_normalized <= z_frac_normalized_ns;
 
+        rounding_mode <= rounding_mode_ns;
+        guard_bit <= guard_bit_ns;
+        round_bit <= round_bit_ns;
+        sticky_bit <= sticky_bit_ns;
+
         invalid_operation <= invalid_operation_ns;
         overflow <= overflow_ns;
 
@@ -98,7 +121,11 @@ always_ff @(posedge clk_i) begin
     end
 end
 
+`ifdef ICARUS
+always @(*) begin
+`else
 always_comb begin
+`endif
     z_sign_ns = z_sign;
     z_exp_ns = z_exp;
 
@@ -107,6 +134,11 @@ always_comb begin
 
     z_exp_normalized_ns = z_exp_normalized;
     z_frac_normalized_ns = z_frac_normalized;
+
+    rounding_mode_ns = rounding_mode;
+    guard_bit_ns = guard_bit;
+    round_bit_ns = round_bit;
+    sticky_bit_ns = sticky_bit;
 
     invalid_operation_ns = invalid_operation;
     overflow_ns = overflow;
@@ -121,11 +153,16 @@ always_comb begin
                 except_invalid_operation_o = 'h0;
                 except_overflow_o = 'h0;
 
-            end else if (data_valid_i) begin
+            end else if (data_ready_i) begin
                 z_sign_ns = (x_greater_i) ? x_sign_i : y_sign_i;
                 z_exp_ns = (x_greater_i) ? x_exp_i : y_exp_i;
 
                 {z_frac_carry_ns, z_frac_expanded_ns} = (should_subtract) ? a_frac - (b_frac  >> exp_shift_i) : a_frac + (b_frac  >> exp_shift_i);
+
+                rounding_mode_ns = rounding_mode_i;
+                guard_bit_ns = (b_frac >> exp_shift_i - 1) & 23'b1;
+                round_bit_ns = (b_frac >> (exp_shift_i - 2)) & 23'b1;
+                sticky_bit_ns = |(b_frac & sticky_bit_mask);
 
                 if ( (x_infinity_i && y_infinity_i) || (x_nan_i || y_nan_i) )
                     state_ns = INVALID_OPERANDS;
@@ -144,30 +181,53 @@ always_comb begin
             z_exp_normalized_ns = z_exp;
             z_frac_normalized_ns = z_frac_expanded;
 
+            guard_bit_ns = guard_bit;
+            round_bit_ns = round_bit;
+            sticky_bit_ns = sticky_bit;
+
             if (z_frac_carry) begin
                 z_frac_normalized_ns = z_frac_expanded >> 1;
                 z_frac_normalized_ns[23] = 'b1;
                 z_exp_normalized_ns = z_exp + 1;
+
+                guard_bit_ns = z_frac_normalized[0];
+                round_bit_ns = guard_bit;
+                sticky_bit_ns = sticky_bit | round_bit;
             end
 
             else begin
-`ifdef ICARUS
+                int i;
+                i = 1;
                 while(!z_frac_normalized_ns[23]) begin
-                    z_frac_normalized_ns <<= 1;
-                    z_exp_normalized_ns -= 1;
-                end
-`else
-                for (int idx = 23; idx >= 0; idx--) begin
-                    if (z_frac_expanded[idx]) begin
-                        z_frac_normalized_ns <<= (23-idx);
-                        z_exp_normalized_ns -= (23-idx);
-                        break;
+                    z_frac_normalized_ns = z_frac_expanded << i;
+                    z_exp_normalized_ns = z_exp - i;
+                        
+                    if (rounding_mode) begin
+                        z_frac_normalized_ns[0] = guard_bit_ns;
+                        guard_bit_ns = round_bit_ns;
+                        round_bit_ns = 'b0;
                     end
+
+                    i++;
                 end
-`endif
             end
 
             invalid_operation_ns = 'h0;
+
+            if (rounding_mode == 'b000001)
+                state_ns = ROUND_TIE_TO_EVEN;
+            else
+                state_ns = VALIDATE_RESULT;
+        end
+
+        ROUND_TIE_TO_EVEN: begin
+            if (guard_bit && (round_bit | sticky_bit | z_frac_normalized[0])) begin
+                z_frac_normalized_ns = z_frac_normalized + 1;
+
+                if (z_frac_normalized_ns == 23'h7fffff)
+                    z_exp_normalized_ns = z_exp + 1;
+            end
+
             state_ns = VALIDATE_RESULT;
         end
 
@@ -213,4 +273,5 @@ always_comb begin
         end
     endcase
 end
+
 endmodule

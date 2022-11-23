@@ -6,7 +6,8 @@ module divider (
     input clk_i,
 
     // Control
-    input data_valid_i,
+    input data_ready_i,
+    input [6:0] rounding_mode_i,
     output logic data_valid_o,
 
     // Decomposed operands
@@ -39,20 +40,35 @@ typedef enum {
                 MULT = 0
 } operation;
 
+function void init_submodules;
+    mult_x = 'h0;
+    mult_y = 'h0;
+    mult_data_ready = 'h0;
+    mult_rounding_mode = 'h0;
+
+    add_x = 'h0;
+    add_y = 'h0;
+    add_data_ready = 'h0;
+    add_rounding_mode = 'h0;
+endfunction
+
 function void start_operation;
     input [31:0] x;
     input [31:0] y;
     input op;
+    input [6:0] round_mode;
 
     if (op == ADD) begin
         add_x = x;
         add_y = y;
+        add_rounding_mode = round_mode;
         add_data_ready = 'h1;
     end
 
     else begin
         mult_x = x;
         mult_y = y;
+        mult_rounding_mode = round_mode;
         mult_data_ready = 'h1;
     end
 endfunction
@@ -74,6 +90,7 @@ localparam [31:0]
 
 // Multiplier
 logic mult_data_ready, mult_data_valid;
+logic [6:0] mult_rounding_mode;
 logic [31:0] mult_x, mult_y, mult_z;
 logic mult_overflow;
 
@@ -81,7 +98,8 @@ multiplier M0 (
     .clk_i,
     .rst_i,
 
-    .data_valid_i(mult_data_ready),
+    .data_ready_i(mult_data_ready),
+    .rounding_mode_i(mult_rounding_mode),
     .data_valid_o(mult_data_valid),
 
     .x_sign_i(mult_x[31]),
@@ -104,6 +122,7 @@ multiplier M0 (
 
 // Adder + operand parser
 logic add_data_ready, add_data_valid;
+logic [6:0] add_rounding_mode;
 logic [31:0] add_x, add_y, add_z;
 logic add_x_greater;
 logic [7:0] add_exp_shift;
@@ -121,7 +140,8 @@ adder A0 (
     .clk_i,
     .rst_i,
 
-    .data_valid_i(add_data_ready),
+    .data_ready_i(add_data_ready),
+    .rounding_mode_i(add_rounding_mode),
     .data_valid_o(add_data_valid),
 
     .x_sign_i(add_x[31]),
@@ -148,7 +168,6 @@ adder A0 (
 // Scaled denominator in range [0.5, 1]
 logic [31:0] denominator_scaled;
 assign denominator_scaled = {1'b0, 8'd126, denominator[22:0]};
-
 
 // Metadata
 logic x_is_zero;
@@ -183,6 +202,8 @@ logic [31:0]
     temp, temp_ns,
     partial, partial_ns;
 
+logic [6:0] rounding_mode, rounding_mode_ns;
+
 logic [1:0] iteration, iteration_ns;
 logic step_count, step_count_ns;
 
@@ -199,6 +220,8 @@ always_ff @(posedge clk_i) begin
         temp <= 'h0;
         partial <= 'h0;
 
+        rounding_mode <= 'h0;
+
         step_count <= 'h0;
         iteration <= 'h0;
 
@@ -213,6 +236,8 @@ always_ff @(posedge clk_i) begin
         denominator <= denominator_ns;
         temp <= temp_ns;
         partial <= partial_ns;
+
+        rounding_mode <= rounding_mode_ns;
 
         step_count <= step_count_ns;
         iteration <= iteration_ns;
@@ -234,6 +259,8 @@ always_comb begin
     temp_ns = temp;
     partial_ns = partial;
 
+    rounding_mode_ns = rounding_mode;
+
     step_count_ns = step_count;
     iteration_ns = iteration;
 
@@ -243,13 +270,7 @@ always_comb begin
     case (state)
         READY: begin
             if (rst_i) begin
-                mult_x = 'h0;
-                mult_y = 'h0;
-                mult_data_ready = 'h0;
-
-                add_x = 'h0;
-                add_y = 'h0;
-                add_data_ready = 'h0;
+                init_submodules();
 
                 data_valid_o = 'h0;
                 z_o = 'h0;
@@ -257,11 +278,12 @@ always_comb begin
                 except_overflow_o = 'h0;
             end 
             
-            else if (data_valid_i) begin
+            else if (data_ready_i) begin
                 state_ns = PRECOMPUTE_A;
 
                 numerator_ns = {x_sign_i, x_exp_i, x_frac_i};
                 denominator_ns = {y_sign_i, y_exp_i, y_frac_i};
+                rounding_mode_ns = rounding_mode_i;
 
                 if ((x_nan_i || y_nan_i) || (x_infinity_i && y_infinity_i))
                     state_ns = INVALID_OPERANDS;
@@ -286,7 +308,7 @@ always_comb begin
 
         // partial = (32/17) * D
         PRECOMPUTE_A: begin
-            start_operation(nr_const_a, denominator_scaled, MULT);
+            start_operation(nr_const_a, denominator_scaled, MULT, 'h0);
 
             // Wait for mult to latch inputs
             if (!step_count && mult_data_valid) begin
@@ -303,7 +325,7 @@ always_comb begin
 
         // partial = (48/17) - partial
         PRECOMPUTE_B: begin
-            start_operation(nr_const_b, {~partial[31], partial[30:0]}, ADD);
+            start_operation(nr_const_b, {~partial[31], partial[30:0]}, ADD, 'h0);
 
             // Wait for add to latch inputs
             if (!step_count && add_data_valid) begin
@@ -321,7 +343,7 @@ always_comb begin
 
         // temp = partial * D
         RECURSION_A: begin
-            start_operation(partial, denominator_scaled, MULT);
+            start_operation(partial, denominator_scaled, MULT, 'h0);
 
             // Wait for mult to latch inputs
             if (!step_count && mult_data_valid) begin
@@ -338,7 +360,7 @@ always_comb begin
 
         // temp = 2 - temp
         RECURSION_B: begin
-            start_operation(32'h40000000, {~temp[31], temp[30:0]}, ADD);
+            start_operation(32'h40000000, {~temp[31], temp[30:0]}, ADD, 'h0);
 
             // Wait for add to latch inputs
             if (!step_count && add_data_valid) begin
@@ -355,7 +377,7 @@ always_comb begin
 
         // partial = temp * partial
         RECURSION_C: begin
-            start_operation(temp, partial, MULT);
+            start_operation(temp, partial, MULT, 'h0);
 
             // Wait for mult to latch inputs
             if (!step_count && mult_data_valid) begin
@@ -414,6 +436,8 @@ always_comb begin
         end
 
         // z = partial * N
+        // All previous partials have been treated with inf precision
+        // but rounding may occur at this step
         SOLUTION: begin
             start_operation(    numerator,
                                 {  
@@ -421,7 +445,8 @@ always_comb begin
                                     partial[30:23] + 8'd126 - denominator[30:23],
                                     partial[22:0]
                                 },
-                                MULT
+                                MULT,
+                                'h0
             );
 
             // Wait for mult to latch inputs

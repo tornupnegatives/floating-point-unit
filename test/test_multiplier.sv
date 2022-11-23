@@ -28,7 +28,8 @@ module test_multiplier;
     // Control signals
     logic rst_i;
     logic clk_i;
-    logic data_valid_i;
+    logic data_ready_i;
+    logic [6:0] rounding_mode_i;
     logic data_valid_o;
 
     // Results
@@ -41,7 +42,8 @@ module test_multiplier;
     multiplier DUT_MULTPLIER(
         .rst_i,
         .clk_i,
-        .data_valid_i,
+        .data_ready_i,
+        .rounding_mode_i,
         .data_valid_o,
 
         .x_sign_i(x_sign_o),
@@ -78,12 +80,12 @@ module test_multiplier;
 
         // Start adder
         @(posedge clk_i) begin
-            data_valid_i = 'h1;
+            data_ready_i = 'h1;
         end
 
         // Wait for adder
         @(posedge clk_i) begin
-            data_valid_i = 'h0;
+            data_ready_i = 'h0;
         end
 
         while (!data_valid_o)
@@ -132,14 +134,15 @@ module test_multiplier;
     always #5 clk_i = ~clk_i;
 
     initial begin
-        $display("Testing operand parser");
+        $display("Testing multiplier (no rounding)");
 
         // Prepare DUT
         clk_i = 'h0;
         rst_i = 'h1;
         x_i = 'h0;
         y_i = 'h0;
-        data_valid_i = 'h0;
+        data_ready_i = 'h0;
+        rounding_mode_i = 'b0;
 
         // Reset DUT
         repeat (16) @ (posedge clk_i);
@@ -242,6 +245,22 @@ module test_multiplier;
 
         // 3.40e38 * -1e37 = inf
         perform_exception('h7f7fffff, 'hfcf0bdc2, 1);
+
+        // TTE Rounding ///////////////////////////////////////////////////////
+        $display("Testing rounding mode TTE");
+        rounding_mode_i = 'b000001;
+
+        // -8092.000425 * 0.00000040523 = -0.003279121332
+        perform_arithmetic('hc5fce001, 'h34d98e63, 'hbb56e687);
+
+        // 46.02 * -39.8034 = -1831.752468
+        perform_arithmetic('h4238147b, 'hc21f36ae, 'hc4e4f814);
+
+        // 98.0125 * 12.0125 = 1177.37515625
+        perform_arithmetic('h42c40666, 'h41403333, 'h44932c01);
+
+        // 999.98999 * 0.01 = 9.9998999
+        perform_arithmetic('h4479ff5c, 'h3c23d70a, 'h411fff97);
 
         $display("@@@ PASSED");
         $finish;

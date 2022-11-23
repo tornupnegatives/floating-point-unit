@@ -28,7 +28,8 @@ module test_divider;
     // Control signals
     logic rst_i;
     logic clk_i;
-    logic data_valid_i;
+    logic data_ready_i;
+    logic [6:0] rounding_mode_i;
     logic data_valid_o;
 
     // Results
@@ -41,7 +42,8 @@ module test_divider;
     divider DUT_DIVIDER(
         .rst_i,
         .clk_i,
-        .data_valid_i,
+        .data_ready_i,
+        .rounding_mode_i,
         .data_valid_o,
 
         .x_sign_i(x_sign_o),
@@ -81,12 +83,12 @@ module test_divider;
 
         // Start adder
         @(posedge clk_i) begin
-            data_valid_i = 'h1;
+            data_ready_i = 'h1;
         end
 
         // Wait for adder
         @(posedge clk_i) begin
-            data_valid_i = 'h0;
+            data_ready_i = 'h0;
         end
 
         while (!data_valid_o)
@@ -144,14 +146,15 @@ module test_divider;
     always #5 clk_i = ~clk_i;
 
     initial begin
-        $display("Testing operand parser");
+        $display("Testing divider (no rounding)");
 
         // Prepare DUT
         clk_i = 'h0;
         rst_i = 'h1;
         x_i = 'h0;
         y_i = 'h0;
-        data_valid_i = 'h0;
+        data_ready_i = 'h0;
+        rounding_mode_i = 'b0;
 
         // Reset DUT
         repeat (16) @ (posedge clk_i);
@@ -160,9 +163,6 @@ module test_divider;
         // No normalization ///////////////////////////////////////////////////
 
         $display("Case A: Legal operands");
-
-        // -3.0 / 15.5 = -0.1935483871
-        perform_arithmetic('h40866666, 'h404CCCCC, 'h3FA7FFFF);
 
         // 1.0 / 2.0 = 0.5
         perform_arithmetic('h3f800000, 'h40000000, 'h3effffff);
