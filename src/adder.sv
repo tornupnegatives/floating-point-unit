@@ -197,18 +197,29 @@ always_comb begin
 
             else begin
                 int i;
+
+`ifdef ICARUS
                 i = 1;
                 while(!z_frac_normalized_ns[23]) begin
                     z_frac_normalized_ns = z_frac_expanded << i;
                     z_exp_normalized_ns = z_exp - i;
-                        
-                    if (rounding_mode) begin
-                        z_frac_normalized_ns[0] = guard_bit_ns;
-                        guard_bit_ns = round_bit_ns;
-                        round_bit_ns = 'b0;
-                    end
-
+                    
                     i++;
+                end
+ `else
+                for (i = 23; i >= 0; i--) begin
+                    if (z_frac_expanded[i]) begin
+                        z_frac_normalized_ns = z_frac_expanded << (23 - i);
+                        z_exp_normalized_ns = z_exp - (23 - i);
+                        break;
+                    end
+                end
+ `endif
+
+                if (rounding_mode) begin
+                    z_frac_normalized_ns[0] = guard_bit_ns;
+                    guard_bit_ns = round_bit_ns;
+                    round_bit_ns = 'b0;
                 end
             end
 

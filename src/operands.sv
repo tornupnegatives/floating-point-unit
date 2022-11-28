@@ -1,3 +1,5 @@
+`timescale 1ns/1ps
+
 module operands (
     // Operands
     input [31:0] x_i,
@@ -64,5 +66,4 @@ assign y_infinity_o = (y_exp == 'hff && y_frac == 'h0);
 
 assign x_nan_o = (x_exp == 'hff && x_frac != 'h0);
 assign y_nan_o = (y_exp == 'hff && y_frac != 'h0);
-
 endmodule
